@@ -7,7 +7,6 @@ import sys
 import time
 import cProfile
 
-
 class CommandInterface:
 
     def __init__(self):
@@ -306,10 +305,6 @@ class CommandInterface:
     def time_out(self):
         return time.time() - self.start_time >= self.time_limit
 
-    # Undo last move
-    def undo_move(self, move_played):
-        self.board[int(move_played[1])][int(move_played[0])] = None
-
     # Get all the points in the same row of the board
     def get_row(self, row_index):
         return self.board[row_index]
@@ -389,14 +384,17 @@ class CommandInterface:
         else:
             return self.categorize_move_deep(legal_moves)
 
+
     # Recursively solve the board using negamax
-    def recursive_solve(self, moves_to_play, move_sequence, depth):
+    def recursive_solve(self, move_sequence, depth, available_legal_moves):
+
+        # print(f"Move sequence at depth {depth}: {move_sequence}")
 
         # Check if there is only 1 move to play -> Winning
-        if len(moves_to_play) == 1:
-            return True, moves_to_play[0]
+        if len(available_legal_moves) == 1:
+            return True, available_legal_moves[0]
         # Check if there is no more move to play -> Losing
-        elif not moves_to_play:
+        elif not available_legal_moves:
             self.positions[move_sequence] = [False, None]
             return False, None
 
@@ -411,9 +409,7 @@ class CommandInterface:
                 return None, None
 
         # Search for a winning move
-        # Optimize by searching additional level and using the number of points can be played by multiple digits as a heuristic
-        sorted_categorized_moves = []
-        for move in moves_to_play:
+        for move in available_legal_moves:
 
             x = int(move[0])
             y = int(move[1])
@@ -428,27 +424,22 @@ class CommandInterface:
             self.board[y][x] = digit
 
             # Check legal moves to play
-            potential_moves, number_of_multiple_digit = self.categorize_move_root(moves_to_play, depth)
-            sorted_categorized_moves.append((move, number_of_multiple_digit))
-            # Undo the last move to play another move
-            self.board[y][x] = None
+            # sorted_categorized_moves = []
+            moves, number_of_multiple_digits = self.categorize_move_root(available_legal_moves, depth)
 
-        # Optimize by searching moves with a lower number of points having multiple-digit legal move
-        sorted_categorized_moves.sort(key=lambda item: item[1])
-        moves = []
-        for move in sorted_categorized_moves:
-            moves.append(move[0])
+            # print(moves, number_of_multiple_digits)
+            # sorted_categorized_moves.append((move, number_of_multiple_digits))
+            # sorted_categorized_moves.sort(key=lambda item: item[1])
+            # moves = []
+            # for min_move in sorted_categorized_moves:
+            #     moves.append(min_move[0])
+            #
+            # print(moves)
 
-        # Search for a winning move
-        for move in moves:
-
-            x = int(move[0])
-            y = int(move[1])
-            digit = int(move[2])
-
-            self.board[y][x] = digit
-            winning, winning_move = self.recursive_solve(moves, move_sequence + f"-{x}.{y}.{digit}", depth + 1)
+            # Check if the move is a winning move or not
+            winning, winning_move = self.recursive_solve(move_sequence + f"-{x}.{y}.{digit}", depth + 1, moves)
             self.number_of_calls += 1
+            # Undo the last move to play another move
             self.board[y][x] = None
 
             # If timeout
@@ -457,11 +448,11 @@ class CommandInterface:
 
             # The move is a winning move, the opponent has no winning moves after that
             elif not winning:
-                self.positions[move_sequence] = True, winning_move
+                self.positions[move_sequence] = [True, move]
                 return True, move
 
         # If there are no winning moves for us, then we definitely lose
-        self.positions[move_sequence] = False, None
+        self.positions[move_sequence] = [False, None]
         return False, None
 
     # new function to be implemented for assignment 2
@@ -471,21 +462,26 @@ class CommandInterface:
         self.start_time = time.time()
 
         # Begin searching for a winning from the current position
-        winning, winning_move = self.recursive_solve(self.get_legal_moves(), "Start", 0)
+        # Notice that we are searching from the current position before playing any move
+        # Therefore, there is no need to negate the result
+        # Optimization: reusing the initial legal moves and then reduce it by each move
+        # since the number of legal moves can only decrease without replacement
+        winning, winning_move = self.recursive_solve("Start", 0, self.get_legal_moves())
 
         # There is a timeout event
         if winning is None:
             print("unknown")
 
-        # The current play is the loser
+        # The current player is going to win
         elif winning:
             print(f"{str(self.player)} {winning_move[0]} {winning_move[1]} {winning_move[2]}")
 
-        # The current player is the winner
+        # The current player is going to lose
         else:
             print(3 - self.player)
 
         # print(f"Time spent: {str(time.time() - self.start_time)}")
+        # print(self.positions)
         return True
 
     # ===============================================================================================
