@@ -315,28 +315,20 @@ class CommandInterface:
 
     def categorize_move_deep(self, legal_moves):
         moves = []
-        categorized_moves = {}
-        number_of_multiple_digit = 0
         for move in legal_moves:
             x, y, digit = int(move[0]), int(move[1]), int(move[2])
             if self.is_legal(x, y, digit):
-                if (x, y) not in categorized_moves:
-                    categorized_moves[(x, y)] = 1
-                else:
-                    number_of_multiple_digit += 1
                 moves.append(move)
 
-        return moves, number_of_multiple_digit
+        return moves
 
     # Optimization: randomizing the choice of digit of a move
     # For a move in a row and a column with seemingly equal number of digits,
     # only 1 digit is randomly chosen for the move
     def categorize_move_root(self, legal_moves, depth):
 
-        if depth <= 2 and (
-                self.row_number >= 4 and self.column_number >= 4 or self.column_number >= 4 and self.row_number >= 4):
+        if depth <= 2 and (self.row_number >= 4 and self.column_number >= 4 or self.column_number >= 4 and self.row_number >= 4):
 
-            number_of_multiple_digit = 0
             moves = []
             categorized_moves = {}
             for move in legal_moves:
@@ -373,13 +365,11 @@ class CommandInterface:
                     else:
                         moves.append([coordinates[0], coordinates[1], digits[0]])
 
-                    number_of_multiple_digit += 1
-
                 # If only 1 digit can be chosen for this move
                 else:
                     moves.append([coordinates[0], coordinates[1], digits[0]])
 
-            return moves, number_of_multiple_digit
+            return moves
 
         else:
             return self.categorize_move_deep(legal_moves)
@@ -425,7 +415,7 @@ class CommandInterface:
 
             # Check legal moves to play
             # sorted_categorized_moves = []
-            moves, number_of_multiple_digits = self.categorize_move_root(available_legal_moves, depth)
+            moves = self.categorize_move_root(available_legal_moves, depth)
 
             # print(moves, number_of_multiple_digits)
             # sorted_categorized_moves.append((move, number_of_multiple_digits))
