@@ -1,7 +1,7 @@
 # CMPUT 455 Assignment 2 starter code
 # Implement the specified commands to complete the assignment
 # Full assignment specification here: https://webdocs.cs.ualberta.ca/~mmueller/courses/cmput455/assignments/a2.html
-
+import copy
 import random
 import sys
 import time
@@ -298,94 +298,144 @@ class CommandInterface:
 
     # new function to be implemented for assignment 2
     def timelimit(self, args):
-        self.time_limit = float(args[0])
-        return True
+        input = float(args[0])
+        if 1 <= input <= 100:
+            self.time_limit = input
+            return True
+        return False
 
     # Check if there is a timeout
     def time_out(self):
         return time.time() - self.start_time >= self.time_limit
 
-    # Get all the points in the same row of the board
-    def get_row(self, row_index):
-        return self.board[row_index]
+    # Update the legal_moves after a move played
+    def update_legal_moves(self, legal_moves, move_played):
 
-    # Get all the points in the same column of the board
-    def get_column(self, column_index):
-        return [row[column_index] for row in self.board]
-
-    def categorize_move_deep(self, legal_moves):
         moves = []
-        for move in legal_moves:
-            x, y, digit = int(move[0]), int(move[1]), int(move[2])
-            if self.is_legal(x, y, digit):
-                moves.append(move)
+        removed_moves = []
+        played_x, played_y, played_digit = move_played[0], move_played[1], move_played[2]
 
-        return moves
+        for legal_move in legal_moves:
 
-    # Optimization: randomizing the choice of digit of a move
-    # For a move in a row and a column with seemingly equal number of digits,
-    # only 1 digit is randomly chosen for the move
-    def categorize_move_root(self, legal_moves, depth):
+            x, y, digit = legal_move[0], legal_move[1], legal_move[2]
 
-        if depth <= 2 and (self.row_number >= 4 and self.column_number >= 4 or self.column_number >= 4 and self.row_number >= 4):
+            # Skip the move if it's the same point just played
+            if played_x == x and played_y == y:
+                removed_moves.append(legal_move)
+                continue
 
-            moves = []
-            categorized_moves = {}
-            for move in legal_moves:
-                x, y, digit = int(move[0]), int(move[1]), int(move[2])
-                if self.is_legal(x, y, digit):
-                    if (x, y) not in categorized_moves:
-                        categorized_moves[(x, y)] = [digit]
-                    else:
-                        categorized_moves[(x, y)].append(digit)
+            # Flag to indicate whether to remove this move
+            remove_move = False
 
-            for coordinates, digits in categorized_moves.items():
+            # Check if the move is in the same row or column as the move just played
+            if played_x == x or played_y == y:
 
-                row = self.get_row(int(coordinates[0]))
-                column = self.get_column(int(coordinates[0]))
+                # If the digit is the same
+                if played_digit == digit:
 
-                # If both digits can be chosen for this move
-                if len(digits) == 2:
+                    # Check balance constraint and triple constraint
+                    # Simulate placing the digit on the board
+                    self.board[y][x] = digit
 
-                    zero_row_count = row.count(0)
-                    zero_column_count = column.count(0)
-                    one_row_count = row.count(1)
-                    one_column_count = column.count(1)
+                    # Check for balance constraint in the row or column
+                    if played_x == x:  # Same column
+                        column = [self.board[row_index][x] for row_index in range(self.column_number)]
+                        if column.count(digit) > self.half_column_number_threshold:
+                            remove_move = True
+                    if played_y == y:  # Same row
+                        row = self.board[y]
+                        if row.count(digit) > self.half_row_number_threshold:
+                            remove_move = True
 
-                    # If the digits are closely equal in number in a row and in a column
-                    if (((zero_row_count - one_row_count <= 1 or
-                          zero_row_count - one_row_count >= -1) and
-                         zero_row_count + one_row_count < self.half_row_number_threshold) and
-                            ((zero_column_count - one_column_count <= 1 or
-                              zero_column_count - one_column_count >= -1) and
-                             zero_column_count + one_column_count >= self.half_column_number_threshold)):
-                        moves.append([coordinates[0], coordinates[1], digits[random.randint(0, 1)]])
+                    # Check for triple constraint in the row
+                    if played_y == y:
+                        row = self.board[y]
+                        consecutive = 0
+                        for point in row:
+                            if point == digit:
+                                consecutive += 1
+                                if consecutive >= 3:
+                                    remove_move = True
+                                    break
+                            else:
+                                consecutive = 0
 
-                    # Add the move with distinct digit
-                    else:
-                        moves.append([coordinates[0], coordinates[1], digits[0]])
+                    # Check for triple constraint in the column
+                    if played_x == x:
+                        column = [self.board[row_index][x] for row_index in range(self.column_number)]
+                        consecutive = 0
+                        for point in column:
+                            if point == digit:
+                                consecutive += 1
+                                if consecutive >= 3:
+                                    remove_move = True
+                                    break
+                            else:
+                                consecutive = 0
 
-                # If only 1 digit can be chosen for this move
-                else:
-                    moves.append([coordinates[0], coordinates[1], digits[0]])
+                    # Undo the simulated move
+                    self.board[y][x] = None
 
-            return moves
+                    if remove_move:
+                        removed_moves.append(legal_move)
+                        continue
 
-        else:
-            return self.categorize_move_deep(legal_moves)
+            # If we reach here, the move is still legal
+            moves.append([x, y, digit])
 
+        return moves, removed_moves
 
     # Recursively solve the board using negamax
-    def recursive_solve(self, move_sequence, depth, available_legal_moves):
+    def recursive_solve(self, available_legal_moves):
 
-        # print(f"Move sequence at depth {depth}: {move_sequence}")
+        # Check if there are 2 moves to play
+        if len(available_legal_moves) == 2:
+            move_1, move_2 = available_legal_moves
+            x_1, y_1, digit_1 = move_1[0], move_1[1], move_1[2]
+            move_1_win = False
+            x_2, y_2, digit_2 = move_2[0], move_2[1], move_2[2]
+            move_2_win = False
 
+            # Play each move and check if it wins
+            self.board[y_1][x_1] = digit_1
+            # Check if the other move is still legal
+            move_1_win = not self.is_legal(x_2, y_2, digit_2)
+
+            if move_1_win:
+                self.positions[hash(str(self.board))] = [True, move_1]
+                # self.positions[str(self.board)] = [True, move_1]
+                self.board[y_1][x_1] = None
+                return True, move_1
+
+            self.board[y_1][x_1] = None
+
+            self.board[y_2][x_2] = digit_2
+            # Check if the other move is still legal
+            move_2_win = not self.is_legal(x_1, y_1, digit_1)
+
+            if move_2_win:
+                self.positions[hash(str(self.board))] = [True, move_2]
+                # self.positions[str(self.board)] = [True, move_2]
+                self.board[y_2][x_2] = None
+                return True, move_2
+
+            self.board[y_2][x_2] = None
+
+            self.positions[hash(str(self.board))] = [False, None]
+            # self.positions[str(self.board)] = [False, None]
+            return False, None
         # Check if there is only 1 move to play -> Winning
-        if len(available_legal_moves) == 1:
-            return True, available_legal_moves[0]
+        elif len(available_legal_moves) == 1:
+            only_move = available_legal_moves[0]
+            self.board[only_move[1]][only_move[0]] = only_move[2]
+            self.positions[hash(str(self.board))] = [True, only_move]
+            # self.positions[str(self.board)] = [True, only_move]
+            self.board[only_move[1]][only_move[0]] = None
+            return True, only_move
         # Check if there is no more move to play -> Losing
         elif not available_legal_moves:
-            self.positions[move_sequence] = [False, None]
+            self.positions[hash(str(self.board))] = [False, None]
+            # self.positions[str(self.board)] = [False, None]
             return False, None
 
         # Check for timeout to cancel all recursive calls
@@ -393,20 +443,22 @@ class CommandInterface:
             return None, None
 
         # Check if there is still time every 5,000 recursive calls
-        if self.number_of_calls % 5000 == 0:
-            if self.time_out():
-                self.timed_out = True
-                return None, None
+        if self.time_out():
+            self.timed_out = True
+            return None, None
 
         # Search for a winning move
         for move in available_legal_moves:
 
-            x = int(move[0])
-            y = int(move[1])
-            digit = int(move[2])
+            # print(f"Testing out move {move} from board {self.board}")
+
+            x = move[0]
+            y = move[1]
+            digit = move[2]
 
             # Check if we encounter this position before to reuse calculations
-            current_position = self.positions.get(move_sequence)
+            current_position = self.positions.get(hash(str(self.board)))
+            # current_position = self.positions.get(str(self.board))
             if current_position is not None:
                 return current_position[0], current_position[1]
 
@@ -414,21 +466,14 @@ class CommandInterface:
             self.board[y][x] = digit
 
             # Check legal moves to play
-            # sorted_categorized_moves = []
-            moves = self.categorize_move_root(available_legal_moves, depth)
-
-            # print(moves, number_of_multiple_digits)
-            # sorted_categorized_moves.append((move, number_of_multiple_digits))
-            # sorted_categorized_moves.sort(key=lambda item: item[1])
-            # moves = []
-            # for min_move in sorted_categorized_moves:
-            #     moves.append(min_move[0])
-            #
-            # print(moves)
+            moves, removed_moves = self.update_legal_moves(copy.deepcopy(available_legal_moves), move)
 
             # Check if the move is a winning move or not
-            winning, winning_move = self.recursive_solve(move_sequence + f"-{x}.{y}.{digit}", depth + 1, moves)
-            self.number_of_calls += 1
+            winning, winning_move = self.recursive_solve(copy.deepcopy(moves))
+
+            # Increase the call counter
+            # self.number_of_calls += 1
+
             # Undo the last move to play another move
             self.board[y][x] = None
 
@@ -437,12 +482,18 @@ class CommandInterface:
                 return None, None
 
             # The move is a winning move, the opponent has no winning moves after that
-            elif not winning:
-                self.positions[move_sequence] = [True, move]
+            if not winning:
+                self.positions[hash(str(self.board))] = [True, move]
+                # self.positions[str(self.board)] = [True, move]
                 return True, move
 
+            if self.time_out():
+                self.timed_out = True
+                return None, None
+
         # If there are no winning moves for us, then we definitely lose
-        self.positions[move_sequence] = [False, None]
+        self.positions[hash(str(self.board))] = [False, None]
+        # self.positions[str(self.board)] = [False, None]
         return False, None
 
     # new function to be implemented for assignment 2
@@ -456,7 +507,9 @@ class CommandInterface:
         # Therefore, there is no need to negate the result
         # Optimization: reusing the initial legal moves and then reduce it by each move
         # since the number of legal moves can only decrease without replacement
-        winning, winning_move = self.recursive_solve("Start", 0, self.get_legal_moves())
+        all_legal_moves = self.get_legal_moves()
+        formatted_legal_moves = [[int(item) for item in move] for move in all_legal_moves]
+        winning, winning_move = self.recursive_solve(formatted_legal_moves)
 
         # There is a timeout event
         if winning is None:
@@ -470,8 +523,6 @@ class CommandInterface:
         else:
             print(3 - self.player)
 
-        # print(f"Time spent: {str(time.time() - self.start_time)}")
-        # print(self.positions)
         return True
 
     # ===============================================================================================
