@@ -4,6 +4,7 @@
 
 import sys
 import random
+import time
 
 class CommandInterface:
 
@@ -22,6 +23,8 @@ class CommandInterface:
         }
         self.board = [[None]]
         self.player = 1
+        self.time_limit = 1  # Default time limit
+        self.best_move = None
     
     #===============================================================================================
     # VVVVVVVVVV START of PREDEFINED FUNCTIONS. DO NOT MODIFY. VVVVVVVVVV
@@ -264,15 +267,137 @@ class CommandInterface:
             print("unfinished")
         return True
     
-    # new function to be implemented for assignment 2
-    def timelimit(self, args):
-        raise NotImplementedError("This command is not yet implemented.")
-        return True
+    # def timelimit(self, args):
+    #     if not self.arg_check(args, "seconds"):
+    #         return False
+    #     try:
+    #         seconds = int(args[0])
+    #         if seconds < 1 or seconds > 100:
+    #             print("Invalid time limit. Must be in range 1 to 100.")
+    #             return False
+    #         self.time_limit = seconds
+    #     except ValueError:
+    #         print("Argument must be an integer.")
+    #         return False
+    #     return True
     
-    # new function to be implemented for assignment 2
-    def solve(self, args):
-        raise NotImplementedError("This command is not yet implemented.")
+    # def solve(self, args):
+    #     start_time = time.time()
+    #     best_move = None
+    #     winner = self.minimax(self.player, float('-inf'), float('inf'), start_time)
+        
+    #     if winner == 0:
+    #         print("unknown")
+    #     elif winner == self.player:
+    #         print(f"{winner} {self.best_move[0]} {self.best_move[1]} {self.best_move[2]}")
+    #     else:
+    #         print(winner)
+    #     return True
+
+    # def minimax(self, player, alpha, beta, start_time):
+    #     if time.time() - start_time > self.time_limit:
+    #         return 0  # Time limit exceeded, return unknown
+
+    #     if len(self.get_legal_moves()) == 0:
+    #         return 3 - player  # Return the winner (1 if player 2 wins, 2 if player 1 wins)
+
+    #     best_score = float('-inf') if player == self.player else float('inf')
+    #     best_move = None
+    #     for move in self.get_legal_moves():
+    #         x, y, digit = map(int, move)
+    #         self.board[y][x] = digit
+    #         original_player = self.player
+    #         self.player = 3 - self.player  # Switch player
+    #         score = self.minimax(3 - player, alpha, beta, start_time)
+    #         self.player = original_player  # Switch back
+    #         self.board[y][x] = None
+
+    #         if player == self.player:
+    #             if score > best_score:
+    #                 best_score = score
+    #                 best_move = move
+    #             alpha = max(alpha, best_score)
+    #         else:
+    #             best_score = min(best_score, score)
+    #             beta = min(beta, best_score)
+
+    #         if beta <= alpha:
+    #             break
+
+    #     if player == self.player:
+    #         self.best_move = best_move
+
+    #     return best_score
+
+    def timelimit(self, args):
+        if not self.arg_check(args, "seconds"):
+            return False
+        try:
+            seconds = int(args[0])
+            if seconds < 1 or seconds > 100:
+                print("Invalid time limit. Must be in range 1 to 100.")
+                return False
+            self.time_limit = seconds  # Set the new time limit
+            print(f"Time limit set to {self.time_limit} seconds.")
+        except ValueError:
+            print("Argument must be an integer.")
+            return False
         return True
+
+    def solve(self, args):
+        start_time = time.time()  # Record start time
+        best_move = None
+
+        winner = self.minimax(self.player, float('-inf'), float('inf'), start_time)  # Run minimax search
+
+        if winner == 0:
+            print("unknown")  # Time limit exceeded, no solution
+        elif winner == self.player:
+            print(f"{winner} {self.best_move[0]} {self.best_move[1]} {self.best_move[2]}")  # Best move found
+        else:
+            print(winner)  # Winner identified
+        return True
+
+    def minimax(self, player, alpha, beta, start_time):
+        # Check if time has exceeded the limit
+        if time.time() - start_time > self.time_limit:
+            return 0  # Return unknown if time limit is exceeded
+
+        # Base case: Check if there are no legal moves left, return the opponent as the winner
+        if len(self.get_legal_moves()) == 0:
+            return 3 - player  # Return the winner (opponent of current player)
+
+        best_score = float('-inf') if player == self.player else float('inf')
+        best_move = None
+        for move in self.get_legal_moves():
+            x, y, digit = map(int, move)
+            self.board[y][x] = digit  # Play move
+            original_player = self.player
+            self.player = 3 - self.player  # Switch to the other player
+
+            # Recursively call minimax for the next player
+            score = self.minimax(3 - player, alpha, beta, start_time)
+            self.player = original_player  # Switch back to original player
+            self.board[y][x] = None  # Undo move
+
+            # Apply alpha-beta pruning
+            if player == self.player:  # Maximizing player
+                if score > best_score:
+                    best_score = score
+                    best_move = move
+                alpha = max(alpha, best_score)
+            else:  # Minimizing player
+                best_score = min(best_score, score)
+                beta = min(beta, best_score)
+
+            if beta <= alpha:
+                break  # Prune branches
+
+        if player == self.player:
+            self.best_move = best_move  # Store the best move
+
+        return best_score  # Return the best score found
+
     
     #===============================================================================================
     # ɅɅɅɅɅɅɅɅɅɅ END OF ASSIGNMENT 2 FUNCTIONS. ɅɅɅɅɅɅɅɅɅɅ
