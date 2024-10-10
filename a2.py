@@ -201,10 +201,12 @@ class CommandInterface:
             self.board[y][x] = None
             return False
 
+        # Check for row
         consecutive = 0
         count = 0
-        for col in range(self.row_number):
-            if self.board[y][col] == num:
+        row = self.board[y]
+        for point in row:
+            if point == num:
                 count += 1
                 consecutive += 1
                 if consecutive >= 3:
@@ -385,6 +387,59 @@ class CommandInterface:
 
         return moves, removed_moves
 
+    def another_is_legal(self, x, y, num):
+
+        # Simulate the move
+        self.board[y][x] = num
+
+        consecutive = 0
+        count = 0
+        self.board[y][x] = num
+        for row in range(self.column_number):
+            if self.board[row][x] == num:
+                count += 1
+                consecutive += 1
+                if consecutive >= 3:
+                    self.board[y][x] = None
+                    return False
+            else:
+                consecutive = 0
+        if count > self.half_column_number_threshold:
+            self.board[y][x] = None
+            return False
+
+        # Check for row
+        consecutive = 0
+        count = 0
+        row = self.board[y]
+        for point in row:
+            if point == num:
+                count += 1
+                consecutive += 1
+                if consecutive >= 3:
+                    self.board[y][x] = None
+                    return False
+            else:
+                consecutive = 0
+        if count > self.half_row_number_threshold:
+            self.board[y][x] = None
+            return False
+
+        # Undo the move
+        self.board[y][x] = None
+
+        return True
+
+    def another_get_legal_moves(self):
+        moves = []
+        for y in range(self.column_number):
+            for x in range(self.row_number):
+                if self.board[y][x] is None:
+                    for num in range(2):
+                        if self.another_is_legal(x, y, num):
+                            moves.append([x, y, num])
+        return moves
+
     # Recursively solve the board using negamax
     def recursive_solve(self, available_legal_moves):
 
@@ -400,10 +455,10 @@ class CommandInterface:
             # Play each move and check if it wins
             self.board[y_1][x_1] = digit_1
             # Check if the other move is still legal
-            move_1_win = not self.is_legal(x_2, y_2, digit_2)
+            move_1_win = not self.another_is_legal(x_2, y_2, digit_2)
 
             if move_1_win:
-                self.positions[hash(str(self.board))] = [True, move_1]
+                self.positions[str(self.board)] = [True, move_1]
                 self.board[y_1][x_1] = None
                 return True, move_1
 
@@ -411,52 +466,49 @@ class CommandInterface:
 
             self.board[y_2][x_2] = digit_2
             # Check if the other move is still legal
-            move_2_win = not self.is_legal(x_1, y_1, digit_1)
+            move_2_win = not self.another_is_legal(x_1, y_1, digit_1)
 
             if move_2_win:
-                self.positions[hash(str(self.board))] = [True, move_2]
+                self.positions[str(self.board)] = [True, move_2]
                 self.board[y_2][x_2] = None
                 return True, move_2
 
             self.board[y_2][x_2] = None
 
-            self.positions[hash(str(self.board))] = [False, None]
+            self.positions[str(self.board)] = [False, None]
             return False, None
 
         # Check if there is only 1 move to play -> Winning
         elif len(available_legal_moves) == 1:
 
             only_move = available_legal_moves[0]
-            # self.board[only_move[1]][only_move[0]] = only_move[2]
-            self.positions[hash(str(self.board))] = [True, only_move]
-            # self.board[only_move[1]][only_move[0]] = None
+            self.positions[str(self.board)] = [True, only_move]
             return True, only_move
 
         # Check if there is no more move to play -> Losing
         elif not available_legal_moves:
-            self.positions[hash(str(self.board))] = [False, None]
+            self.positions[str(self.board)] = [False, None]
             return False, None
 
         # Check for timeout to cancel all recursive calls
         if self.timed_out:
             return None, None
 
-        # Check if there is still time every 5,000 recursive calls
-        if self.time_out():
-            self.timed_out = True
-            return None, None
+        self.number_of_calls += 1
+
+        # Check if there is still time every 500 recursive calls
+        if self.number_of_calls % (self.row_number + self.column_number) == 0:
+            if self.time_out():
+                self.timed_out = True
+                return None, None
 
         # Search for a winning move
         for move in available_legal_moves:
 
-            # print(f"Testing out move {move} from board {self.board}")
-
-            x = move[0]
-            y = move[1]
-            digit = move[2]
+            x, y, digit = move
 
             # Check if we encounter this position before to reuse calculations
-            current_position = self.positions.get(hash(str(self.board)))
+            current_position = self.positions.get(str(self.board))
             if current_position is not None:
                 return current_position[0], current_position[1]
 
@@ -464,11 +516,9 @@ class CommandInterface:
             self.board[y][x] = digit
 
             # Check legal moves to play
-            # moves, removed_moves = self.update_legal_moves(copy.deepcopy(available_legal_moves), move)
             moves, removed_moves = self.update_legal_moves(available_legal_moves, move)
 
             # Check if the move is a winning move or not
-            # winning, winning_move = self.recursive_solve(copy.deepcopy(moves))
             winning, winning_move = self.recursive_solve(moves)
 
             # Undo the last move to play another move
@@ -480,7 +530,7 @@ class CommandInterface:
 
             # The move is a winning move, the opponent has no winning moves after that
             if not winning:
-                self.positions[hash(str(self.board))] = [True, move]
+                self.positions[str(self.board)] = [True, move]
                 return True, move
 
             if self.time_out():
@@ -488,7 +538,7 @@ class CommandInterface:
                 return None, None
 
         # If there are no winning moves for us, then we definitely lose
-        self.positions[hash(str(self.board))] = [False, None]
+        self.positions[str(self.board)] = [False, None]
         return False, None
 
     # new function to be implemented for assignment 2
@@ -497,14 +547,7 @@ class CommandInterface:
         # Start the timer
         self.start_time = time.process_time()
 
-        # Begin searching for a winning from the current position
-        # Notice that we are searching from the current position before playing any move
-        # Therefore, there is no need to negate the result
-        # Optimization: reusing the initial legal moves and then reduce it by each move
-        # since the number of legal moves can only decrease without replacement
-        all_legal_moves = self.get_legal_moves()
-        formatted_legal_moves = [[int(item) for item in move] for move in all_legal_moves]
-        winning, winning_move = self.recursive_solve(formatted_legal_moves)
+        winning, winning_move = self.recursive_solve(self.another_get_legal_moves())
 
         # There is a timeout event
         if winning is None:
@@ -524,7 +567,36 @@ class CommandInterface:
     # ɅɅɅɅɅɅɅɅɅɅ END OF ASSIGNMENT 2 FUNCTIONS. ɅɅɅɅɅɅɅɅɅɅ
     # ===============================================================================================
 
-def test_41(interface):
+def t_9(interface):
+    profiler = cProfile.Profile()
+    interface.game(['2', '2'])
+    interface.timelimit(['1'])
+    profiler.enable()
+    interface.solve([])
+    profiler.disable()
+    profiler.print_stats()
+
+def t_26(interface):
+    profiler = cProfile.Profile()
+    interface.game(['8', '4'])
+    interface.play(['5', '1', '0'])
+    interface.play(['0', '1', '0'])
+    interface.play(['7', '1', '0'])
+    interface.play(['4', '2', '0'])
+    interface.play(['4', '0', '0'])
+    interface.play(['2', '3', '1'])
+    interface.play(['4', '1', '1'])
+    interface.play(['3', '1', '0'])
+    interface.play(['1', '3', '1'])
+    interface.play(['5', '0', '0'])
+    interface.play(['2', '0', '1'])
+    interface.timelimit(['15'])
+    profiler.enable()
+    interface.solve([])
+    profiler.disable()
+    profiler.print_stats()
+
+def t_41(interface):
     profiler = cProfile.Profile()
     interface.game(['6', '5'])
     interface.play(['4', '4', '1'])
@@ -539,26 +611,26 @@ def test_41(interface):
     interface.play(['0', '3', '1'])
     interface.play(['5', '2', '1'])
     interface.play(['5', '3', '1'])
-    interface.timelimit(['99'])
+    interface.timelimit(['20'])
     profiler.enable()
     interface.solve([])
     profiler.disable()
     profiler.print_stats()
 
-def test_57(interface):
+def t_57(interface):
     profiler = cProfile.Profile()
     interface.game(['4', '5'])
     interface.play(['1', '3', '0'])
     interface.play(['1', '2', '0'])
     interface.play(['1', '1', '1'])
     interface.play(['3', '1', '1'])
-    interface.timelimit(['99'])
+    interface.timelimit(['40'])
     profiler.enable()
     interface.solve([])
     profiler.disable()
     profiler.print_stats()
 
-def test_68(interface):
+def t_68(interface):
     profiler = cProfile.Profile()
     interface.game(['5', '5'])
     interface.play(['0', '0', '1'])
@@ -570,7 +642,7 @@ def test_68(interface):
     interface.play(['0', '4', '1'])
     interface.play(['3', '3', '0'])
     interface.play(['3', '1', '0'])
-    interface.timelimit(['99'])
+    interface.timelimit(['80'])
     profiler.enable()
     interface.solve([])
     profiler.disable()
@@ -578,7 +650,9 @@ def test_68(interface):
 
 if __name__ == "__main__":
     interface = CommandInterface()
-    # test_41(interface)
-    # test_57(interface)
-    # test_68(interface)
+    # t_9(interface)
+    # t_26(interface)
+    # t_41(interface)
+    # t_57(interface)
+    # t_68(interface)
     interface.main_loop()
