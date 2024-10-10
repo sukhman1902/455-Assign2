@@ -306,7 +306,7 @@ class CommandInterface:
 
     # Check if there is a timeout
     def time_out(self):
-        return time.time() - self.start_time >= self.time_limit
+        return time.process_time() - self.start_time >= self.time_limit
 
     # Update the legal_moves after a move played
     def update_legal_moves(self, legal_moves, move_played):
@@ -321,7 +321,7 @@ class CommandInterface:
 
             # Skip the move if it's the same point just played
             if played_x == x and played_y == y:
-                removed_moves.append(legal_move)
+                removed_moves.append([x, y, digit])
                 continue
 
             # Flag to indicate whether to remove this move
@@ -377,7 +377,7 @@ class CommandInterface:
                     self.board[y][x] = None
 
                     if remove_move:
-                        removed_moves.append(legal_move)
+                        removed_moves.append([x, y, digit])
                         continue
 
             # If we reach here, the move is still legal
@@ -390,6 +390,7 @@ class CommandInterface:
 
         # Check if there are 2 moves to play
         if len(available_legal_moves) == 2:
+
             move_1, move_2 = available_legal_moves
             x_1, y_1, digit_1 = move_1[0], move_1[1], move_1[2]
             move_1_win = False
@@ -403,7 +404,6 @@ class CommandInterface:
 
             if move_1_win:
                 self.positions[hash(str(self.board))] = [True, move_1]
-                # self.positions[str(self.board)] = [True, move_1]
                 self.board[y_1][x_1] = None
                 return True, move_1
 
@@ -415,27 +415,26 @@ class CommandInterface:
 
             if move_2_win:
                 self.positions[hash(str(self.board))] = [True, move_2]
-                # self.positions[str(self.board)] = [True, move_2]
                 self.board[y_2][x_2] = None
                 return True, move_2
 
             self.board[y_2][x_2] = None
 
             self.positions[hash(str(self.board))] = [False, None]
-            # self.positions[str(self.board)] = [False, None]
             return False, None
+
         # Check if there is only 1 move to play -> Winning
         elif len(available_legal_moves) == 1:
+
             only_move = available_legal_moves[0]
-            self.board[only_move[1]][only_move[0]] = only_move[2]
+            # self.board[only_move[1]][only_move[0]] = only_move[2]
             self.positions[hash(str(self.board))] = [True, only_move]
-            # self.positions[str(self.board)] = [True, only_move]
-            self.board[only_move[1]][only_move[0]] = None
+            # self.board[only_move[1]][only_move[0]] = None
             return True, only_move
+
         # Check if there is no more move to play -> Losing
         elif not available_legal_moves:
             self.positions[hash(str(self.board))] = [False, None]
-            # self.positions[str(self.board)] = [False, None]
             return False, None
 
         # Check for timeout to cancel all recursive calls
@@ -458,7 +457,6 @@ class CommandInterface:
 
             # Check if we encounter this position before to reuse calculations
             current_position = self.positions.get(hash(str(self.board)))
-            # current_position = self.positions.get(str(self.board))
             if current_position is not None:
                 return current_position[0], current_position[1]
 
@@ -466,13 +464,12 @@ class CommandInterface:
             self.board[y][x] = digit
 
             # Check legal moves to play
-            moves, removed_moves = self.update_legal_moves(copy.deepcopy(available_legal_moves), move)
+            # moves, removed_moves = self.update_legal_moves(copy.deepcopy(available_legal_moves), move)
+            moves, removed_moves = self.update_legal_moves(available_legal_moves, move)
 
             # Check if the move is a winning move or not
-            winning, winning_move = self.recursive_solve(copy.deepcopy(moves))
-
-            # Increase the call counter
-            # self.number_of_calls += 1
+            # winning, winning_move = self.recursive_solve(copy.deepcopy(moves))
+            winning, winning_move = self.recursive_solve(moves)
 
             # Undo the last move to play another move
             self.board[y][x] = None
@@ -484,7 +481,6 @@ class CommandInterface:
             # The move is a winning move, the opponent has no winning moves after that
             if not winning:
                 self.positions[hash(str(self.board))] = [True, move]
-                # self.positions[str(self.board)] = [True, move]
                 return True, move
 
             if self.time_out():
@@ -493,14 +489,13 @@ class CommandInterface:
 
         # If there are no winning moves for us, then we definitely lose
         self.positions[hash(str(self.board))] = [False, None]
-        # self.positions[str(self.board)] = [False, None]
         return False, None
 
     # new function to be implemented for assignment 2
     def solve(self, args):
 
         # Start the timer
-        self.start_time = time.time()
+        self.start_time = time.process_time()
 
         # Begin searching for a winning from the current position
         # Notice that we are searching from the current position before playing any move
@@ -529,7 +524,61 @@ class CommandInterface:
     # ɅɅɅɅɅɅɅɅɅɅ END OF ASSIGNMENT 2 FUNCTIONS. ɅɅɅɅɅɅɅɅɅɅ
     # ===============================================================================================
 
+def test_41(interface):
+    profiler = cProfile.Profile()
+    interface.game(['6', '5'])
+    interface.play(['4', '4', '1'])
+    interface.play(['4', '0', '1'])
+    interface.play(['3', '2', '0'])
+    interface.play(['0', '4', '1'])
+    interface.play(['2', '1', '1'])
+    interface.play(['1', '2', '0'])
+    interface.play(['3', '1', '0'])
+    interface.play(['2', '0', '1'])
+    interface.play(['5', '1', '0'])
+    interface.play(['0', '3', '1'])
+    interface.play(['5', '2', '1'])
+    interface.play(['5', '3', '1'])
+    interface.timelimit(['99'])
+    profiler.enable()
+    interface.solve([])
+    profiler.disable()
+    profiler.print_stats()
+
+def test_57(interface):
+    profiler = cProfile.Profile()
+    interface.game(['4', '5'])
+    interface.play(['1', '3', '0'])
+    interface.play(['1', '2', '0'])
+    interface.play(['1', '1', '1'])
+    interface.play(['3', '1', '1'])
+    interface.timelimit(['99'])
+    profiler.enable()
+    interface.solve([])
+    profiler.disable()
+    profiler.print_stats()
+
+def test_68(interface):
+    profiler = cProfile.Profile()
+    interface.game(['5', '5'])
+    interface.play(['0', '0', '1'])
+    interface.play(['4', '4', '0'])
+    interface.play(['4', '0', '0'])
+    interface.play(['4', '3', '1'])
+    interface.play(['4', '1', '0'])
+    interface.play(['3', '4', '1'])
+    interface.play(['0', '4', '1'])
+    interface.play(['3', '3', '0'])
+    interface.play(['3', '1', '0'])
+    interface.timelimit(['99'])
+    profiler.enable()
+    interface.solve([])
+    profiler.disable()
+    profiler.print_stats()
 
 if __name__ == "__main__":
     interface = CommandInterface()
+    # test_41(interface)
+    # test_57(interface)
+    # test_68(interface)
     interface.main_loop()
